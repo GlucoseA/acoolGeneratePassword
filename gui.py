@@ -25,6 +25,7 @@ def copy_password() -> None:
     else:
         messagebox.showwarning("Unavailable", "pyperclip not installed.")
 
+
 def generate_password() -> None:
     try:
         length = int(length_var.get())
@@ -34,7 +35,6 @@ def generate_password() -> None:
         messagebox.showerror("Invalid input", "Please enter a positive integer.")
         return
 
-    # 构建字符集
     alphabet = ""
     if letters_var.get():
         alphabet += string.ascii_lowercase
@@ -47,12 +47,7 @@ def generate_password() -> None:
 
     password = ''.join(secrets.choice(alphabet) for _ in range(length))
     if capital_var.get() and password:
-#330f5o-codex/打包-tkinter-项目为-windows-应用并美化-gui
-        # ensure the first character is always an uppercase letter
         password = secrets.choice(string.ascii_uppercase) + password[1:]
-
-        password = password[0].upper() + password[1:]
-main
 
     note = note_var.get()
     os.makedirs("data_file", exist_ok=True)
@@ -64,6 +59,16 @@ main
     if copy_var.get():
         copy_password()
 
+
+def update_capital_state(*_) -> None:
+    """Enable or disable the capital option based on letters checkbox."""
+    if letters_var.get():
+        capital_cb.state(["!disabled"])
+    else:
+        capital_var.set(False)
+        capital_cb.state(["disabled"])
+
+
 root = tk.Tk()
 root.title("Password Generator")
 root.resizable(False, False)
@@ -74,11 +79,7 @@ except Exception:
 
 style = ttk.Style()
 try:
-#330f5o-codex/打包-tkinter-项目为-windows-应用并美化-gui
-    style.theme_use("clam")
-=======
     style.theme_use("vista")
- main
 except tk.TclError:
     pass
 style.configure("TFrame", background="#F2F2F2")
@@ -88,6 +89,7 @@ style.configure("Result.TEntry", foreground="#e67e22", font=("Consolas", 12))
 
 length_var = tk.StringVar(value="8")
 letters_var = tk.BooleanVar(value=True)
+letters_var.trace_add("write", update_capital_state)
 digits_var = tk.BooleanVar(value=True)
 special_var = tk.BooleanVar(value=False)
 capital_var = tk.BooleanVar(value=False)
@@ -149,4 +151,5 @@ result_entry.pack(side="left", fill="x", expand=True)
 copy_btn = ttk.Button(result_frame, text="复制", command=copy_password)
 copy_btn.pack(side="left", padx=(5,0))
 
+update_capital_state()
 root.mainloop()
