@@ -68,13 +68,16 @@ except Exception:
 
 style = ttk.Style()
 try:
-    style.theme_use("clam")
+    style.theme_use("vista")  # 在Windows上使用vista主题
 except tk.TclError:
     try:
-        style.theme_use("vista")
+        style.theme_use("clam")
     except tk.TclError:
         pass
 
+# 配置Checkbutton样式以显示√
+style.configure("TCheckbutton", 
+                font=("Segoe UI", 10))
 style.configure("TFrame", background="#F2F2F2")
 style.configure("TLabel", background="#F2F2F2", font=("Segoe UI", 10))
 style.configure("Header.TLabel", font=("Segoe UI", 16, "bold"), background="#F2F2F2")
@@ -110,11 +113,11 @@ title_label.pack(side="left", padx=(10, 0))
 frame = ttk.LabelFrame(main_frame, text="设置", padding=10)
 frame.pack(fill="x")
 
-length_label = ttk.Label(frame, text="长度:")
-length_label.grid(row=0, column=0, sticky="e")
+# 密码长度提示在左，输入框在右
+length_label = ttk.Label(frame, text="密码长度")
+length_label.grid(row=0, column=0, sticky="e", padx=(0,5))
 length_entry = ttk.Entry(frame, textvariable=length_var, width=7)
 length_entry.grid(row=0, column=1, sticky="w")
-ttk.Label(frame, text="密码长度").grid(row=0, column=2, sticky="w", padx=(5,0))
 
 letters_cb = ttk.Checkbutton(frame, text="字母", variable=letters_var)
 letters_cb.grid(row=1, column=0, sticky="w")
