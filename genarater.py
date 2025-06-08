@@ -11,7 +11,6 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     pyperclip = None
 
-
 SETTINGS_FILE = "settings.json"
 
 
@@ -35,7 +34,7 @@ def save_settings(settings: dict) -> None:
         pass
 
 def ask_positive_int(prompt: str, default: int | None = None) -> int:
-    """Repeatedly prompt until a positive integer is entered."
+    """Repeatedly prompt until a positive integer is entered.
     If the user presses enter without input and a default is provided, the
     default value is returned."""
     while True:

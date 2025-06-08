@@ -14,7 +14,6 @@ try:
 except ImportError:
     pyperclip = None
 
-
 SETTINGS_FILE = "settings.json"
 
 
@@ -124,6 +123,7 @@ capital_var = tk.BooleanVar(value=settings.get("capital", False))
 copy_var = tk.BooleanVar(value=settings.get("copy", False))
 save_var = tk.BooleanVar(value=settings.get("save", True))
 log_path_var = tk.StringVar(value=settings.get("log_dir", "data_file"))
+
 note_var = tk.StringVar()
 result_var = tk.StringVar()
 status_var = tk.StringVar()
