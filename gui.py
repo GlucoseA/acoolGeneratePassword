@@ -4,14 +4,38 @@
 import os
 import secrets
 import string
+import json
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 from tkinter import ttk
 
 try:
     import pyperclip
 except ImportError:
     pyperclip = None
+
+
+SETTINGS_FILE = "settings.json"
+
+
+def load_settings() -> dict:
+    """Load configuration from SETTINGS_FILE if available."""
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def save_settings(settings: dict) -> None:
+    """Persist settings to SETTINGS_FILE."""
+    try:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
 def copy_password() -> None:
     """Copy generated password to clipboard if available."""
@@ -20,7 +44,8 @@ def copy_password() -> None:
         return
     if pyperclip:
         pyperclip.copy(password)
-        messagebox.showinfo("已复制", "密码已复制到剪贴板")
+        status_var.set("密码已复制到剪贴板")
+        root.after(2000, lambda: status_var.set(""))
     else:
         messagebox.showwarning("Unavailable", "pyperclip not installed.")
 
@@ -54,9 +79,10 @@ def generate_password() -> None:
         password = ''.join(secrets.choice(alphabet) for _ in range(length))
 
     note = note_var.get()
-    os.makedirs("data_file", exist_ok=True)
-    with open("data_file/Token.txt", "a", encoding="utf-8") as f:
-        f.write(f"{note}: {password}\n")
+    if save_var.get():
+        os.makedirs(log_path_var.get(), exist_ok=True)
+        with open(os.path.join(log_path_var.get(), "Token.txt"), "a", encoding="utf-8") as f:
+            f.write(f"{note}: {password}\n")
 
     result_var.set(password)
 
@@ -88,14 +114,19 @@ style.configure("TLabel", background="#F2F2F2", font=("Segoe UI", 10))
 style.configure("Header.TLabel", font=("Segoe UI", 16, "bold"), background="#F2F2F2")
 style.configure("Result.TEntry", foreground="#e67e22", font=("Consolas", 12))
 
-length_var = tk.StringVar(value="8")
-letters_var = tk.BooleanVar(value=True)
-digits_var = tk.BooleanVar(value=True)
-special_var = tk.BooleanVar(value=False)
-capital_var = tk.BooleanVar(value=False)
-copy_var = tk.BooleanVar(value=False)
+settings = load_settings()
+
+length_var = tk.StringVar(value=str(settings.get("length", 8)))
+letters_var = tk.BooleanVar(value=settings.get("letters", True))
+digits_var = tk.BooleanVar(value=settings.get("digits", True))
+special_var = tk.BooleanVar(value=settings.get("special", False))
+capital_var = tk.BooleanVar(value=settings.get("capital", False))
+copy_var = tk.BooleanVar(value=settings.get("copy", False))
+save_var = tk.BooleanVar(value=settings.get("save", True))
+log_path_var = tk.StringVar(value=settings.get("log_dir", "data_file"))
 note_var = tk.StringVar()
 result_var = tk.StringVar()
+status_var = tk.StringVar()
 
 main_frame = ttk.Frame(root, padding=20)
 main_frame.pack(fill="both", expand=True)
@@ -140,15 +171,28 @@ capital_cb = ttk.Checkbutton(frame, text="首字母大写", variable=capital_var
 capital_cb.grid(row=2, column=1, sticky="w")
 copy_cb = ttk.Checkbutton(frame, text="生成后自动复制", variable=copy_var)
 copy_cb.grid(row=3, column=0, columnspan=2, sticky="w")
+save_cb = ttk.Checkbutton(frame, text="保存到文件", variable=save_var)
+save_cb.grid(row=3, column=2, sticky="w")
 
 note_label = ttk.Label(frame, text="备注:")
 note_label.grid(row=4, column=0, sticky="e")
 note_entry = ttk.Entry(frame, textvariable=note_var, width=30)
 note_entry.grid(row=4, column=1, sticky="w")
-ttk.Label(frame, text="会记录在日志中").grid(row=4, column=2, sticky="w", padx=(5,0))
+ttk.Label(frame, text="备注将写入文件").grid(row=4, column=2, sticky="w", padx=(5,0))
+
+path_label = ttk.Label(frame, text="日志目录")
+path_label.grid(row=5, column=0, sticky="e")
+path_entry = ttk.Entry(frame, textvariable=log_path_var, width=25)
+path_entry.grid(row=5, column=1, sticky="w")
+def choose_dir():
+    path = filedialog.askdirectory(initialdir=log_path_var.get() or '.')
+    if path:
+        log_path_var.set(path)
+choose_btn = ttk.Button(frame, text="选择...", command=choose_dir)
+choose_btn.grid(row=5, column=2, sticky="w")
 
 generate_button = ttk.Button(frame, text="生成密码", command=generate_password)
-generate_button.grid(row=5, column=0, columnspan=3, pady=(5, 0))
+generate_button.grid(row=6, column=0, columnspan=3, pady=(5, 0))
 
 result_frame = ttk.Frame(main_frame, padding=(0,10,0,0))
 result_frame.pack(fill="x")
@@ -156,6 +200,8 @@ result_entry = ttk.Entry(result_frame, textvariable=result_var, state="readonly"
 result_entry.pack(side="left", fill="x", expand=True)
 copy_btn = ttk.Button(result_frame, text="复制", command=copy_password)
 copy_btn.pack(side="left", padx=(5,0))
+status_label = ttk.Label(main_frame, textvariable=status_var)
+status_label.pack(fill="x")
 
 # 监听字母复选框变化，控制首字母大写可用性
 def on_letters_var_change(*args):
@@ -169,4 +215,21 @@ letters_var.trace_add("write", lambda *args: on_letters_var_change())
 # 初始化一次
 on_letters_var_change()
 
+
+def on_close() -> None:
+    data = {
+        "length": int(length_var.get() or 8),
+        "letters": letters_var.get(),
+        "digits": digits_var.get(),
+        "special": special_var.get(),
+        "capital": capital_var.get(),
+        "copy": copy_var.get(),
+        "save": save_var.get(),
+        "log_dir": log_path_var.get(),
+    }
+    save_settings(data)
+    root.destroy()
+
+
+root.protocol("WM_DELETE_WINDOW", on_close)
 root.mainloop()
