@@ -25,9 +25,8 @@ This repository contains code generated with Codex and should not be used in cri
    若使用了 `ttk` 或其他库，请一并安装。
 2. **进入项目目录** 执行：
    ```bash
-   pyinstaller --noconsole --onefile \
-       --add-data "resources;resources" \
-       --icon=resources/logo.png gui.py
+   pyinstaller --noconsole --onefile --add-data "resources;resources" --icon=resources/logo.png gui.py
+
    ```
    打包完成后 `dist/gui.exe` 即可在 Windows 上运行。
 
