@@ -47,7 +47,12 @@ def generate_password() -> None:
 
     password = ''.join(secrets.choice(alphabet) for _ in range(length))
     if capital_var.get() and password:
+#330f5o-codex/打包-tkinter-项目为-windows-应用并美化-gui
+        # ensure the first character is always an uppercase letter
+        password = secrets.choice(string.ascii_uppercase) + password[1:]
+
         password = password[0].upper() + password[1:]
+main
 
     note = note_var.get()
     os.makedirs("data_file", exist_ok=True)
@@ -69,7 +74,11 @@ except Exception:
 
 style = ttk.Style()
 try:
+#330f5o-codex/打包-tkinter-项目为-windows-应用并美化-gui
+    style.theme_use("clam")
+=======
     style.theme_use("vista")
+ main
 except tk.TclError:
     pass
 style.configure("TFrame", background="#F2F2F2")
