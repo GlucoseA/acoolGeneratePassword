@@ -3,3 +3,4 @@ data_file/
 flake8.log
 *.pyc
 resources/*.png
+settings.json
