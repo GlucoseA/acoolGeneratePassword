@@ -143,4 +143,16 @@ result_entry.pack(side="left", fill="x", expand=True)
 copy_btn = ttk.Button(result_frame, text="复制", command=copy_password)
 copy_btn.pack(side="left", padx=(5,0))
 
+# 监听字母复选框变化，控制首字母大写可用性
+def on_letters_var_change(*args):
+    if not letters_var.get():
+        capital_var.set(False)
+        capital_cb.state(["disabled"])
+    else:
+        capital_cb.state(["!disabled"])
+
+letters_var.trace_add("write", lambda *args: on_letters_var_change())
+# 初始化一次
+on_letters_var_change()
+
 root.mainloop()
