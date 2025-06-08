@@ -66,14 +66,21 @@ def main() -> None:
     include_special = ask_yes_no("Include special characters")
     capitalize_first = ask_yes_no("Capitalize first letter")
     copy_clipboard = ask_yes_no("Copy password to clipboard")
+    save_file = ask_yes_no("Save password to log file")
+    log_dir = "data_file"
+    if save_file:
+        custom = input("Log directory path (default data_file): ").strip()
+        if custom:
+            log_dir = custom
     note = input("Note for this password: ")
 
     alphabet = build_alphabet(include_letters, include_digits, include_special)
     password = generate_password(length, alphabet, capitalize_first)
 
-    os.makedirs("data_file", exist_ok=True)
-    with open("data_file/Token.txt", "a", encoding="utf-8") as f:
-        f.write(f"{note}: {password}\n")
+    if save_file:
+        os.makedirs(log_dir, exist_ok=True)
+        with open(os.path.join(log_dir, "Token.txt"), "a", encoding="utf-8") as f:
+            f.write(f"{note}: {password}\n")
 
     if copy_clipboard:
         if pyperclip:
