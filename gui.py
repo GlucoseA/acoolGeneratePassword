@@ -4,6 +4,7 @@
 import os
 import secrets
 import string
+import json
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter import ttk
@@ -12,6 +13,28 @@ try:
     import pyperclip
 except ImportError:
     pyperclip = None
+
+SETTINGS_FILE = "settings.json"
+
+
+def load_settings() -> dict:
+    """Load configuration from SETTINGS_FILE if available."""
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def save_settings(settings: dict) -> None:
+    """Persist settings to SETTINGS_FILE."""
+    try:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
 def copy_password() -> None:
     """Copy generated password to clipboard if available."""
@@ -90,14 +113,17 @@ style.configure("TLabel", background="#F2F2F2", font=("Segoe UI", 10))
 style.configure("Header.TLabel", font=("Segoe UI", 16, "bold"), background="#F2F2F2")
 style.configure("Result.TEntry", foreground="#e67e22", font=("Consolas", 12))
 
-length_var = tk.StringVar(value="8")
-letters_var = tk.BooleanVar(value=True)
-digits_var = tk.BooleanVar(value=True)
-special_var = tk.BooleanVar(value=False)
-capital_var = tk.BooleanVar(value=False)
-copy_var = tk.BooleanVar(value=False)
-save_var = tk.BooleanVar(value=True)
-log_path_var = tk.StringVar(value="data_file")
+settings = load_settings()
+
+length_var = tk.StringVar(value=str(settings.get("length", 8)))
+letters_var = tk.BooleanVar(value=settings.get("letters", True))
+digits_var = tk.BooleanVar(value=settings.get("digits", True))
+special_var = tk.BooleanVar(value=settings.get("special", False))
+capital_var = tk.BooleanVar(value=settings.get("capital", False))
+copy_var = tk.BooleanVar(value=settings.get("copy", False))
+save_var = tk.BooleanVar(value=settings.get("save", True))
+log_path_var = tk.StringVar(value=settings.get("log_dir", "data_file"))
+
 note_var = tk.StringVar()
 result_var = tk.StringVar()
 status_var = tk.StringVar()
@@ -145,14 +171,14 @@ capital_cb = ttk.Checkbutton(frame, text="首字母大写", variable=capital_var
 capital_cb.grid(row=2, column=1, sticky="w")
 copy_cb = ttk.Checkbutton(frame, text="生成后自动复制", variable=copy_var)
 copy_cb.grid(row=3, column=0, columnspan=2, sticky="w")
-save_cb = ttk.Checkbutton(frame, text="保存到日志", variable=save_var)
+save_cb = ttk.Checkbutton(frame, text="保存到文件", variable=save_var)
 save_cb.grid(row=3, column=2, sticky="w")
 
 note_label = ttk.Label(frame, text="备注:")
 note_label.grid(row=4, column=0, sticky="e")
 note_entry = ttk.Entry(frame, textvariable=note_var, width=30)
 note_entry.grid(row=4, column=1, sticky="w")
-ttk.Label(frame, text="用于日志记录").grid(row=4, column=2, sticky="w", padx=(5,0))
+ttk.Label(frame, text="备注将写入文件").grid(row=4, column=2, sticky="w", padx=(5,0))
 
 path_label = ttk.Label(frame, text="日志目录")
 path_label.grid(row=5, column=0, sticky="e")
@@ -189,4 +215,21 @@ letters_var.trace_add("write", lambda *args: on_letters_var_change())
 # 初始化一次
 on_letters_var_change()
 
+
+def on_close() -> None:
+    data = {
+        "length": int(length_var.get() or 8),
+        "letters": letters_var.get(),
+        "digits": digits_var.get(),
+        "special": special_var.get(),
+        "capital": capital_var.get(),
+        "copy": copy_var.get(),
+        "save": save_var.get(),
+        "log_dir": log_path_var.get(),
+    }
+    save_settings(data)
+    root.destroy()
+
+
+root.protocol("WM_DELETE_WINDOW", on_close)
 root.mainloop()
