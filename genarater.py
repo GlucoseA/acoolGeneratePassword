@@ -49,9 +49,13 @@ def generate_password(length: int, alphabet: str, capitalize_first: bool) -> str
     if length <= 0:
         raise ValueError("length must be positive")
 
-    chars = [secrets.choice(alphabet) for _ in range(length)]
     if capitalize_first:
-        chars[0] = secrets.choice(string.ascii_uppercase)
+        # 首位必须是大写字母
+        chars = [secrets.choice(string.ascii_uppercase)]
+        if length > 1:
+            chars += [secrets.choice(alphabet) for _ in range(length - 1)]
+    else:
+        chars = [secrets.choice(alphabet) for _ in range(length)]
     return "".join(chars)
 
 

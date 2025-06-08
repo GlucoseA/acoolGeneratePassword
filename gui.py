@@ -44,9 +44,14 @@ def generate_password() -> None:
     if not alphabet:
         alphabet = string.digits
 
-    password = ''.join(secrets.choice(alphabet) for _ in range(length))
-    if capital_var.get() and password:
-        password = password[0].upper() + password[1:]
+    # 使用generator.py中的函数生成密码
+    if capital_var.get() and letters_var.get():
+        # 首位必须是大写字母
+        password = secrets.choice(string.ascii_uppercase)
+        if length > 1:
+            password += ''.join(secrets.choice(alphabet) for _ in range(length - 1))
+    else:
+        password = ''.join(secrets.choice(alphabet) for _ in range(length))
 
     note = note_var.get()
     os.makedirs("data_file", exist_ok=True)
@@ -100,8 +105,15 @@ header.pack(fill="x", pady=(0, 10))
 logo_img = None
 try:
     logo_img = tk.PhotoImage(file=os.path.join("resources", "logo.png"))
+    # 缩放为32x32像素
+    w, h = logo_img.width(), logo_img.height()
+    scale = max(1, max(w // 32, h // 32))
+    if scale > 1:
+        logo_img = logo_img.subsample(scale, scale)
     logo_label = ttk.Label(header, image=logo_img)
-    logo_label.image = logo_img
+    # 用全局变量保存图片引用，防止被回收
+    global _logo_img_ref
+    _logo_img_ref = logo_img
     logo_label.pack(side="left")
 except Exception:
     logo_label = ttk.Label(header, text="")
@@ -113,7 +125,6 @@ title_label.pack(side="left", padx=(10, 0))
 frame = ttk.LabelFrame(main_frame, text="设置", padding=10)
 frame.pack(fill="x")
 
-# 密码长度提示在左，输入框在右
 length_label = ttk.Label(frame, text="密码长度")
 length_label.grid(row=0, column=0, sticky="e", padx=(0,5))
 length_entry = ttk.Entry(frame, textvariable=length_var, width=7)
