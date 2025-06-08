@@ -6,3 +6,8 @@
 - `gui.py`：使用 Tkinter 提供同样的功能界面。
 
 每次生成的密码会与用户输入的备注一起追加到 `data_file/Token.txt`。
+
+
+这个存储库是我自己使用Codex生成的代码，不要随意信任这个代码！！     # Password Generator
+
+This repository contains code I generated myself using Codex; do not trust this code lightly!!
