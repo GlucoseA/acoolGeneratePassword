@@ -9,7 +9,7 @@
 
 
 ## 声明 / Disclaimer
-此仓库的代码由我通过 Codex 自动生成，仅供学习参考，请勿直接用于生产环境。
+此仓库的代码由 Codex 自动生成，仅供学习参考，请勿直接用于生产环境。
 
 This repository contains code generated with Codex and should not be used in critical settings.
 
