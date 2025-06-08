@@ -69,7 +69,7 @@ except Exception:
 
 style = ttk.Style()
 try:
-    style.theme_use("clam")
+    style.theme_use("vista")
 except tk.TclError:
     pass
 style.configure("TFrame", background="#F2F2F2")
