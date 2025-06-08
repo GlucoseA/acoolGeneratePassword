@@ -13,7 +13,6 @@ try:
 except ImportError:
     pyperclip = None
 
-
 def copy_password() -> None:
     """Copy generated password to clipboard if available."""
     password = result_var.get()
@@ -31,7 +30,7 @@ def generate_password() -> None:
         if length <= 0:
             raise ValueError
     except ValueError:
-        messagebox.showerror("Invalid input", "Please enter a positive integer.")
+        messagebox.showerror("Invalid input", "请输入一个正整数作为密码长度。")
         return
 
     # 构建字符集
@@ -47,12 +46,7 @@ def generate_password() -> None:
 
     password = ''.join(secrets.choice(alphabet) for _ in range(length))
     if capital_var.get() and password:
-#330f5o-codex/打包-tkinter-项目为-windows-应用并美化-gui
-        # ensure the first character is always an uppercase letter
-        password = secrets.choice(string.ascii_uppercase) + password[1:]
-
         password = password[0].upper() + password[1:]
-main
 
     note = note_var.get()
     os.makedirs("data_file", exist_ok=True)
@@ -74,13 +68,13 @@ except Exception:
 
 style = ttk.Style()
 try:
-#330f5o-codex/打包-tkinter-项目为-windows-应用并美化-gui
     style.theme_use("clam")
-=======
-    style.theme_use("vista")
- main
 except tk.TclError:
-    pass
+    try:
+        style.theme_use("vista")
+    except tk.TclError:
+        pass
+
 style.configure("TFrame", background="#F2F2F2")
 style.configure("TLabel", background="#F2F2F2", font=("Segoe UI", 10))
 style.configure("Header.TLabel", font=("Segoe UI", 16, "bold"), background="#F2F2F2")
