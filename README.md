@@ -13,32 +13,31 @@
 
 This repository contains code generated with Codex and should not be used in critical settings.
 
-## 使用 PyInstaller 打包 Windows 可执行文件
+## 使用 PyInstaller 打包
 
-以下步骤可以将 `gui.py` 打包成独立的 `.exe` 文件，适合在未安装 Python 的 Windows 电脑上直接运行。
+本项目建议在与目标系统相同的环境中执行打包操作，避免跨平台生成可执行文件的兼容性问题。
 
+### Windows 环境生成 `.exe`
 1. **安装依赖**
    ```bash
    pip install pyinstaller pyperclip
    ```
-   如果使用了 `ttk` 或其他库，请确保一并安装。
-
-2. **进入项目目录**，执行打包命令：
+   若使用了 `ttk` 或其他库，请一并安装。
+2. **进入项目目录** 执行：
    ```bash
    pyinstaller --noconsole --onefile \
        --add-data "resources;resources" \
        --icon=resources/logo.png gui.py
    ```
-   - `--noconsole` 隐藏命令行黑窗口，使应用更像普通桌面程序。
-   - `--onefile` 将所有内容打包成单个 `exe`，方便分发。
-   - `--add-data` 用于包含程序运行所需的资源文件，例如图标。
-   - `--icon` 指定自定义图标。请将自己的 `resources/logo.png` 放入仓库相同路径
-     下，仓库中未包含此文件。
+   打包完成后 `dist/gui.exe` 即可在 Windows 上运行。
 
-3. **查找结果**：打包完成后，在 `dist/` 目录下会生成 `gui.exe`。双击即可运行，无需额外安装 Python。
-
-常见问题：
-* 若 `pyinstaller` 提示缺少模块，请确保在打包前安装好相应依赖。
-* 部分杀毒软件可能会误报新生成的 `.exe`，可尝试在白名单中添加或重新打包。
-
-
+### Linux 环境生成可执行文件
+1. 安装 PyInstaller：
+   ```bash
+   pip install pyinstaller pyperclip
+   ```
+2. 在仓库根目录执行：
+   ```bash
+   pyinstaller --noconsole --onefile gui.py
+   ```
+   程序会生成 `dist/gui`，可在 Linux 终端运行。
