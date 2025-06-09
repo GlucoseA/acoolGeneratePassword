@@ -66,7 +66,8 @@ def generate_password() -> None:
     if special_var.get():
         alphabet += string.punctuation
     if not alphabet:
-        alphabet = string.digits
+        messagebox.showerror("Invalid selection", "请至少选择一种字符类型。")
+        return
 
     # 使用generator.py中的函数生成密码
     if capital_var.get() and letters_var.get():

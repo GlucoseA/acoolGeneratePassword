@@ -78,7 +78,7 @@ def build_alphabet(include_letters: bool, include_digits: bool, include_special:
         alphabet += string.digits
     if include_special:
         alphabet += string.punctuation
-    return alphabet or string.digits
+    return alphabet
 
 
 def generate_password(length: int, alphabet: str, capitalize_first: bool) -> str:
@@ -128,6 +128,9 @@ def main() -> None:
     note = input("Note for this password: ")
 
     alphabet = build_alphabet(include_letters, include_digits, include_special)
+    if not alphabet:
+        print("No character types selected. Please enable at least one type.")
+        return
     password = generate_password(length, alphabet, capitalize_first)
 
     if save_file:
