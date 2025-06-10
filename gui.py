@@ -8,6 +8,7 @@ import json
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter import ttk
+from typing import List
 
 try:
     import pyperclip
@@ -50,6 +51,26 @@ def copy_password() -> None:
     else:
         messagebox.showwarning("Unavailable", "pyperclip not installed.")
 
+
+def password_strength_score(pwd: str) -> int:
+    """Return a simple strength score from 1 to 5."""
+    score = 0
+    length = len(pwd)
+    if length >= 8:
+        score += 1
+    if length >= 12:
+        score += 1
+    types = sum(
+        [
+            any(c.islower() for c in pwd),
+            any(c.isupper() for c in pwd),
+            any(c.isdigit() for c in pwd),
+            any(c in string.punctuation for c in pwd),
+        ]
+    )
+    score += max(0, types - 1)
+    return min(score, 5)
+
 def generate_password() -> None:
     try:
         length = int(length_var.get())
@@ -65,10 +86,9 @@ def generate_password() -> None:
     if letters_var.get():
         alphabet += string.ascii_lowercase
         categories.append(string.ascii_lowercase)
-    if upper_var.get() or capital_var.get():
+    if upper_var.get():
         alphabet += string.ascii_uppercase
-        if upper_var.get():
-            categories.append(string.ascii_uppercase)
+        categories.append(string.ascii_uppercase)
     if digits_var.get():
         alphabet += string.digits
         categories.append(string.digits)
@@ -78,7 +98,11 @@ def generate_password() -> None:
     if not alphabet:
         messagebox.showerror("Invalid selection", "请至少选择一种字符类型。")
         return
-    if length < len(categories):
+
+    required_len = len(categories)
+    if capital_var.get() and not upper_var.get():
+        required_len += 1
+    if length < required_len:
         messagebox.showerror("Invalid input", "长度不足以包含所有选中的类别。")
         return
 
@@ -104,6 +128,8 @@ def generate_password() -> None:
 
     if copy_var.get():
         copy_password()
+
+    strength_var.set(f"强度: {password_strength_score(password)}/5 (仅供参考)")
 
 root = tk.Tk()
 root.title("Password Generator")
@@ -145,6 +171,7 @@ log_path_var = tk.StringVar(value=settings.get("log_dir", "data_file"))
 note_var = tk.StringVar()
 result_var = tk.StringVar()
 status_var = tk.StringVar()
+strength_var = tk.StringVar()
 
 main_frame = ttk.Frame(root, padding=20)
 main_frame.pack(fill="both", expand=True)
@@ -179,28 +206,28 @@ length_label.grid(row=0, column=0, sticky="e", padx=(0,5))
 length_entry = ttk.Entry(frame, textvariable=length_var, width=7)
 length_entry.grid(row=0, column=1, sticky="w")
 
-letters_cb = ttk.Checkbutton(frame, text="字母", variable=letters_var)
+letters_cb = ttk.Checkbutton(frame, text="包含小写字母", variable=letters_var)
 letters_cb.grid(row=1, column=0, sticky="w")
 digits_cb = ttk.Checkbutton(frame, text="数字", variable=digits_var)
 digits_cb.grid(row=1, column=1, sticky="w")
-upper_cb = ttk.Checkbutton(frame, text="大写字母", variable=upper_var)
+upper_cb = ttk.Checkbutton(frame, text="包含大写字母", variable=upper_var)
 upper_cb.grid(row=1, column=2, sticky="w")
-special_cb = ttk.Checkbutton(frame, text="特殊字符", variable=special_var)
+special_cb = ttk.Checkbutton(frame, text="包含特殊字符", variable=special_var)
 special_cb.grid(row=2, column=0, sticky="w")
-capital_cb = ttk.Checkbutton(frame, text="首字母大写", variable=capital_var)
+capital_cb = ttk.Checkbutton(frame, text="随机插入大写", variable=capital_var)
 capital_cb.grid(row=2, column=1, sticky="w")
-copy_cb = ttk.Checkbutton(frame, text="生成后自动复制", variable=copy_var)
+copy_cb = ttk.Checkbutton(frame, text="自动复制到剪贴板", variable=copy_var)
 copy_cb.grid(row=3, column=0, columnspan=2, sticky="w")
-save_cb = ttk.Checkbutton(frame, text="保存到文件", variable=save_var)
+save_cb = ttk.Checkbutton(frame, text="记录到文件", variable=save_var)
 save_cb.grid(row=3, column=2, sticky="w")
 
 note_label = ttk.Label(frame, text="备注:")
 note_label.grid(row=4, column=0, sticky="e")
 note_entry = ttk.Entry(frame, textvariable=note_var, width=30)
 note_entry.grid(row=4, column=1, sticky="w")
-ttk.Label(frame, text="备注将写入文件").grid(row=4, column=2, sticky="w", padx=(5,0))
+ttk.Label(frame, text="备注将与摘要一同写入日志").grid(row=4, column=2, sticky="w", padx=(5,0))
 
-path_label = ttk.Label(frame, text="日志目录")
+path_label = ttk.Label(frame, text="日志保存路径")
 path_label.grid(row=5, column=0, sticky="e")
 path_entry = ttk.Entry(frame, textvariable=log_path_var, width=25)
 path_entry.grid(row=5, column=1, sticky="w")
@@ -211,7 +238,7 @@ def choose_dir():
 choose_btn = ttk.Button(frame, text="选择...", command=choose_dir)
 choose_btn.grid(row=5, column=2, sticky="w")
 
-generate_button = ttk.Button(frame, text="生成密码", command=generate_password)
+generate_button = ttk.Button(frame, text="生成随机密码", command=generate_password)
 generate_button.grid(row=6, column=0, columnspan=3, pady=(5, 0))
 
 result_frame = ttk.Frame(main_frame, padding=(0,10,0,0))
@@ -220,6 +247,8 @@ result_entry = ttk.Entry(result_frame, textvariable=result_var, state="readonly"
 result_entry.pack(side="left", fill="x", expand=True)
 copy_btn = ttk.Button(result_frame, text="复制", command=copy_password)
 copy_btn.pack(side="left", padx=(5,0))
+strength_label = ttk.Label(result_frame, textvariable=strength_var)
+strength_label.pack(side="left", padx=(5,0))
 status_label = ttk.Label(main_frame, textvariable=status_var)
 status_label.pack(fill="x")
 

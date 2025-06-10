@@ -4,6 +4,7 @@
 import os
 import secrets
 import string
+from typing import List
 import json
 
 try:
@@ -96,10 +97,6 @@ def generate_password(length: int,
         raise ValueError("length must be positive")
 
     alphabet = build_alphabet(include_lower, include_upper, include_digits, include_special)
-    if capitalize_first:
-        # 首字母大写选项要求至少一个大写字母
-        include_upper = True
-        alphabet = build_alphabet(include_lower, include_upper, include_digits, include_special)
 
     if not alphabet:
         raise ValueError("No character types selected")
@@ -114,7 +111,10 @@ def generate_password(length: int,
     if include_special:
         categories.append(string.punctuation)
 
-    if length < len(categories):
+    required_len = len(categories)
+    if capitalize_first and not include_upper:
+        required_len += 1
+    if length < required_len:
         raise ValueError("length too short for selected categories")
 
     chars = [secrets.choice(cat) for cat in categories]
@@ -126,6 +126,26 @@ def generate_password(length: int,
         chars[idx] = secrets.choice(string.ascii_uppercase)
 
     return "".join(chars)
+
+
+def password_strength_score(pwd: str) -> int:
+    """Return a simple strength score from 1 to 5 (higher is stronger)."""
+    score = 0
+    length = len(pwd)
+    if length >= 8:
+        score += 1
+    if length >= 12:
+        score += 1
+    types = sum(
+        [
+            any(c.islower() for c in pwd),
+            any(c.isupper() for c in pwd),
+            any(c.isdigit() for c in pwd),
+            any(c in string.punctuation for c in pwd),
+        ]
+    )
+    score += max(0, types - 1)
+    return min(score, 5)
 
 
 def main() -> None:
@@ -188,6 +208,7 @@ def main() -> None:
             print("pyperclip not installed; cannot copy to clipboard.")
 
     print("Generated password:", password)
+    print(f"Password strength: {password_strength_score(password)}/5 (for reference only)")
 
     settings.update(
         {
