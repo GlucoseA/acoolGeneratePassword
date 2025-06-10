@@ -14,7 +14,8 @@ try:
 except ImportError:
     pyperclip = None
 
-SETTINGS_FILE = "settings.json"
+SETTINGS_DIR = os.path.join(os.path.expanduser("~"), ".acoolpwd")
+SETTINGS_FILE = os.path.join(SETTINGS_DIR, "settings.json")
 
 
 def load_settings() -> dict:
@@ -31,6 +32,7 @@ def load_settings() -> dict:
 def save_settings(settings: dict) -> None:
     """Persist settings to SETTINGS_FILE."""
     try:
+        os.makedirs(SETTINGS_DIR, exist_ok=True)
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(settings, f, ensure_ascii=False, indent=2)
     except Exception:
@@ -57,32 +59,46 @@ def generate_password() -> None:
         messagebox.showerror("Invalid input", "请输入一个正整数作为密码长度。")
         return
 
-    # 构建字符集
+    # 构建字符集并确保类别出现
     alphabet = ""
+    categories = []
     if letters_var.get():
         alphabet += string.ascii_lowercase
+        categories.append(string.ascii_lowercase)
+    if upper_var.get() or capital_var.get():
+        alphabet += string.ascii_uppercase
+        if upper_var.get():
+            categories.append(string.ascii_uppercase)
     if digits_var.get():
         alphabet += string.digits
+        categories.append(string.digits)
     if special_var.get():
         alphabet += string.punctuation
+        categories.append(string.punctuation)
     if not alphabet:
         messagebox.showerror("Invalid selection", "请至少选择一种字符类型。")
         return
+    if length < len(categories):
+        messagebox.showerror("Invalid input", "长度不足以包含所有选中的类别。")
+        return
 
-    # 使用generator.py中的函数生成密码
-    if capital_var.get() and letters_var.get():
-        # 首位必须是大写字母
-        password = secrets.choice(string.ascii_uppercase)
-        if length > 1:
-            password += ''.join(secrets.choice(alphabet) for _ in range(length - 1))
-    else:
-        password = ''.join(secrets.choice(alphabet) for _ in range(length))
+    password_chars = [secrets.choice(c) for c in categories]
+    password_chars += [secrets.choice(alphabet) for _ in range(length - len(password_chars))]
+    secrets.SystemRandom().shuffle(password_chars)
+
+    if capital_var.get():
+        idx = secrets.randbelow(length)
+        password_chars[idx] = secrets.choice(string.ascii_uppercase)
+
+    password = ''.join(password_chars)
 
     note = note_var.get()
     if save_var.get():
+        import hashlib
         os.makedirs(log_path_var.get(), exist_ok=True)
+        digest = hashlib.sha256(password.encode("utf-8")).hexdigest()
         with open(os.path.join(log_path_var.get(), "Token.txt"), "a", encoding="utf-8") as f:
-            f.write(f"{note}: {password}\n")
+            f.write(f"{note}: {digest}\n")
 
     result_var.set(password)
 
@@ -118,6 +134,7 @@ settings = load_settings()
 
 length_var = tk.StringVar(value=str(settings.get("length", 8)))
 letters_var = tk.BooleanVar(value=settings.get("letters", True))
+upper_var = tk.BooleanVar(value=settings.get("upper", True))
 digits_var = tk.BooleanVar(value=settings.get("digits", True))
 special_var = tk.BooleanVar(value=settings.get("special", False))
 capital_var = tk.BooleanVar(value=settings.get("capital", False))
@@ -166,6 +183,8 @@ letters_cb = ttk.Checkbutton(frame, text="字母", variable=letters_var)
 letters_cb.grid(row=1, column=0, sticky="w")
 digits_cb = ttk.Checkbutton(frame, text="数字", variable=digits_var)
 digits_cb.grid(row=1, column=1, sticky="w")
+upper_cb = ttk.Checkbutton(frame, text="大写字母", variable=upper_var)
+upper_cb.grid(row=1, column=2, sticky="w")
 special_cb = ttk.Checkbutton(frame, text="特殊字符", variable=special_var)
 special_cb.grid(row=2, column=0, sticky="w")
 capital_cb = ttk.Checkbutton(frame, text="首字母大写", variable=capital_var)
@@ -206,13 +225,14 @@ status_label.pack(fill="x")
 
 # 监听字母复选框变化，控制首字母大写可用性
 def on_letters_var_change(*args):
-    if not letters_var.get():
+    if not (letters_var.get() or upper_var.get()):
         capital_var.set(False)
         capital_cb.state(["disabled"])
     else:
         capital_cb.state(["!disabled"])
 
 letters_var.trace_add("write", lambda *args: on_letters_var_change())
+upper_var.trace_add("write", lambda *args: on_letters_var_change())
 # 初始化一次
 on_letters_var_change()
 
@@ -221,6 +241,7 @@ def on_close() -> None:
     data = {
         "length": int(length_var.get() or 8),
         "letters": letters_var.get(),
+        "upper": upper_var.get(),
         "digits": digits_var.get(),
         "special": special_var.get(),
         "capital": capital_var.get(),
