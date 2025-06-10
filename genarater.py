@@ -11,7 +11,8 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     pyperclip = None
 
-SETTINGS_FILE = "settings.json"
+SETTINGS_DIR = os.path.join(os.path.expanduser("~"), ".acoolpwd")
+SETTINGS_FILE = os.path.join(SETTINGS_DIR, "settings.json")
 
 
 def load_settings() -> dict:
@@ -28,6 +29,7 @@ def load_settings() -> dict:
 def save_settings(settings: dict) -> None:
     """Write configuration to SETTINGS_FILE."""
     try:
+        os.makedirs(SETTINGS_DIR, exist_ok=True)
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(settings, f, ensure_ascii=False, indent=2)
     except Exception:
@@ -69,11 +71,13 @@ def ask_yes_no(prompt: str, default: bool | None = None) -> bool:
         print("Please enter 'y' or 'n'.")
 
 
-def build_alphabet(include_letters: bool, include_digits: bool, include_special: bool) -> str:
+def build_alphabet(include_lower: bool, include_upper: bool, include_digits: bool, include_special: bool) -> str:
     """Build a character set for the password."""
     alphabet = ""
-    if include_letters:
+    if include_lower:
         alphabet += string.ascii_lowercase
+    if include_upper:
+        alphabet += string.ascii_uppercase
     if include_digits:
         alphabet += string.digits
     if include_special:
@@ -81,18 +85,46 @@ def build_alphabet(include_letters: bool, include_digits: bool, include_special:
     return alphabet
 
 
-def generate_password(length: int, alphabet: str, capitalize_first: bool) -> str:
-    """Generate a random password."""
+def generate_password(length: int,
+                      include_lower: bool,
+                      include_upper: bool,
+                      include_digits: bool,
+                      include_special: bool,
+                      capitalize_first: bool) -> str:
+    """Generate a random password ensuring each selected category appears."""
     if length <= 0:
         raise ValueError("length must be positive")
 
+    alphabet = build_alphabet(include_lower, include_upper, include_digits, include_special)
     if capitalize_first:
-        # 首位必须是大写字母
-        chars = [secrets.choice(string.ascii_uppercase)]
-        if length > 1:
-            chars += [secrets.choice(alphabet) for _ in range(length - 1)]
-    else:
-        chars = [secrets.choice(alphabet) for _ in range(length)]
+        # 首字母大写选项要求至少一个大写字母
+        include_upper = True
+        alphabet = build_alphabet(include_lower, include_upper, include_digits, include_special)
+
+    if not alphabet:
+        raise ValueError("No character types selected")
+
+    categories: list[str] = []
+    if include_lower:
+        categories.append(string.ascii_lowercase)
+    if include_upper:
+        categories.append(string.ascii_uppercase)
+    if include_digits:
+        categories.append(string.digits)
+    if include_special:
+        categories.append(string.punctuation)
+
+    if length < len(categories):
+        raise ValueError("length too short for selected categories")
+
+    chars = [secrets.choice(cat) for cat in categories]
+    chars += [secrets.choice(alphabet) for _ in range(length - len(chars))]
+    secrets.SystemRandom().shuffle(chars)
+
+    if capitalize_first:
+        idx = secrets.randbelow(length)
+        chars[idx] = secrets.choice(string.ascii_uppercase)
+
     return "".join(chars)
 
 
@@ -103,7 +135,10 @@ def main() -> None:
         "Password length:", int(settings.get("length", 8))
     )
     include_letters = ask_yes_no(
-        "Include letters", settings.get("letters", True)
+        "Include lowercase letters", settings.get("letters", True)
+    )
+    include_upper = ask_yes_no(
+        "Include uppercase letters", settings.get("upper", True)
     )
     include_digits = ask_yes_no(
         "Include digits", settings.get("digits", True)
@@ -127,16 +162,23 @@ def main() -> None:
             log_dir = custom
     note = input("Note for this password: ")
 
-    alphabet = build_alphabet(include_letters, include_digits, include_special)
+    alphabet = build_alphabet(include_letters, include_upper, include_digits, include_special)
     if not alphabet:
         print("No character types selected. Please enable at least one type.")
         return
-    password = generate_password(length, alphabet, capitalize_first)
+    password = generate_password(length,
+                                 include_letters,
+                                 include_upper,
+                                 include_digits,
+                                 include_special,
+                                 capitalize_first)
 
     if save_file:
+        import hashlib
         os.makedirs(log_dir, exist_ok=True)
+        digest = hashlib.sha256(password.encode("utf-8")).hexdigest()
         with open(os.path.join(log_dir, "Token.txt"), "a", encoding="utf-8") as f:
-            f.write(f"{note}: {password}\n")
+            f.write(f"{note}: {digest}\n")
 
     if copy_clipboard:
         if pyperclip:
@@ -151,6 +193,7 @@ def main() -> None:
         {
             "length": length,
             "letters": include_letters,
+            "upper": include_upper,
             "digits": include_digits,
             "special": include_special,
             "capital": capitalize_first,
