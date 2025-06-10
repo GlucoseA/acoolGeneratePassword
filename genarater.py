@@ -5,6 +5,7 @@ import os
 import secrets
 import string
 import json
+import math
 
 try:
     import pyperclip
@@ -85,6 +86,19 @@ def build_alphabet(include_lower: bool, include_upper: bool, include_digits: boo
     return alphabet
 
 
+def estimate_bruteforce_years(length: int, alphabet_size: int, guesses_per_second: float = 1e9) -> float:
+    """Return estimated brute-force cracking time in years."""
+    if length <= 0 or alphabet_size <= 1:
+        return 0.0
+    # entropy bits = length * log2(alphabet_size)
+    entropy_bits = length * math.log2(alphabet_size)
+    # time in seconds = 2**entropy_bits / guesses_per_second
+    log2_seconds = entropy_bits - math.log2(guesses_per_second)
+    seconds = 2 ** log2_seconds
+    years = seconds / 31_557_600  # average seconds in a year
+    return years
+
+
 def generate_password(length: int,
                       include_lower: bool,
                       include_upper: bool,
@@ -96,12 +110,7 @@ def generate_password(length: int,
         raise ValueError("length must be positive")
 
     alphabet = build_alphabet(include_lower, include_upper, include_digits, include_special)
-    if capitalize_first:
-        # 首字母大写选项要求至少一个大写字母
-        include_upper = True
-        alphabet = build_alphabet(include_lower, include_upper, include_digits, include_special)
-
-    if not alphabet:
+    if not alphabet and not capitalize_first:
         raise ValueError("No character types selected")
 
     categories: list[str] = []
@@ -114,16 +123,25 @@ def generate_password(length: int,
     if include_special:
         categories.append(string.punctuation)
 
-    if length < len(categories):
+    extra_upper = capitalize_first and not include_upper
+    required_len = len(categories) + (1 if extra_upper else 0)
+    if length < required_len:
         raise ValueError("length too short for selected categories")
 
     chars = [secrets.choice(cat) for cat in categories]
-    chars += [secrets.choice(alphabet) for _ in range(length - len(chars))]
+    if extra_upper:
+        chars.append(secrets.choice(string.ascii_uppercase))
+
+    chars += [secrets.choice(alphabet or string.ascii_lowercase) for _ in range(length - len(chars))]
     secrets.SystemRandom().shuffle(chars)
 
     if capitalize_first:
-        idx = secrets.randbelow(length)
-        chars[idx] = secrets.choice(string.ascii_uppercase)
+        chars[0] = secrets.choice(string.ascii_uppercase)
+        if not include_upper:
+            for i in range(1, len(chars)):
+                if chars[i] in string.ascii_uppercase:
+                    chars[i] = secrets.choice(alphabet or string.ascii_lowercase)
+                    break
 
     return "".join(chars)
 
@@ -173,6 +191,17 @@ def main() -> None:
                                  include_special,
                                  capitalize_first)
 
+    alphabet_set = set()
+    if include_letters:
+        alphabet_set.update(string.ascii_lowercase)
+    if include_upper or capitalize_first:
+        alphabet_set.update(string.ascii_uppercase)
+    if include_digits:
+        alphabet_set.update(string.digits)
+    if include_special:
+        alphabet_set.update(string.punctuation)
+    strength_years = estimate_bruteforce_years(length, len(alphabet_set))
+
     if save_file:
         import hashlib
         os.makedirs(log_dir, exist_ok=True)
@@ -188,6 +217,7 @@ def main() -> None:
             print("pyperclip not installed; cannot copy to clipboard.")
 
     print("Generated password:", password)
+    print(f"Estimated brute-force time: ~{strength_years:.2e} years")
 
     settings.update(
         {
