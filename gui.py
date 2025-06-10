@@ -5,6 +5,7 @@ import os
 import secrets
 import string
 import json
+import math
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter import ttk
@@ -38,6 +39,17 @@ def save_settings(settings: dict) -> None:
     except Exception:
         pass
 
+
+def estimate_bruteforce_years(length: int, alphabet_size: int, guesses_per_second: float = 1e9) -> float:
+    """Return estimated brute-force cracking time in years."""
+    if length <= 0 or alphabet_size <= 1:
+        return 0.0
+    entropy_bits = length * math.log2(alphabet_size)
+    log2_seconds = entropy_bits - math.log2(guesses_per_second)
+    seconds = 2 ** log2_seconds
+    years = seconds / 31_557_600
+    return years
+
 def copy_password() -> None:
     """Copy generated password to clipboard if available."""
     password = result_var.get()
@@ -56,41 +68,56 @@ def generate_password() -> None:
         if length <= 0:
             raise ValueError
     except ValueError:
-        messagebox.showerror("Invalid input", "请输入一个正整数作为密码长度。")
+        messagebox.showerror("Invalid input", "密码长度必须为正整数。")
         return
 
-    # 构建字符集并确保类别出现
-    alphabet = ""
+    alphabet_set = set()
     categories = []
     if letters_var.get():
-        alphabet += string.ascii_lowercase
+        alphabet_set.update(string.ascii_lowercase)
         categories.append(string.ascii_lowercase)
-    if upper_var.get() or capital_var.get():
-        alphabet += string.ascii_uppercase
-        if upper_var.get():
-            categories.append(string.ascii_uppercase)
+    if upper_var.get():
+        alphabet_set.update(string.ascii_uppercase)
+        categories.append(string.ascii_uppercase)
     if digits_var.get():
-        alphabet += string.digits
+        alphabet_set.update(string.digits)
         categories.append(string.digits)
     if special_var.get():
-        alphabet += string.punctuation
+        alphabet_set.update(string.punctuation)
         categories.append(string.punctuation)
-    if not alphabet:
+    if capital_var.get():
+        alphabet_set.update(string.ascii_uppercase)
+
+    alphabet = ''.join(alphabet_set)
+    if not alphabet and not capital_var.get():
         messagebox.showerror("Invalid selection", "请至少选择一种字符类型。")
         return
-    if length < len(categories):
-        messagebox.showerror("Invalid input", "长度不足以包含所有选中的类别。")
+
+    extra_upper = capital_var.get() and not upper_var.get()
+    required_len = len(categories) + (1 if extra_upper else 0)
+    if length < required_len:
+        messagebox.showerror("Invalid input", "长度过短，无法满足所选字符类型。")
         return
 
     password_chars = [secrets.choice(c) for c in categories]
-    password_chars += [secrets.choice(alphabet) for _ in range(length - len(password_chars))]
+    if extra_upper:
+        password_chars.append(secrets.choice(string.ascii_uppercase))
+
+    password_chars += [secrets.choice(alphabet or string.ascii_lowercase) for _ in range(length - len(password_chars))]
     secrets.SystemRandom().shuffle(password_chars)
 
     if capital_var.get():
-        idx = secrets.randbelow(length)
-        password_chars[idx] = secrets.choice(string.ascii_uppercase)
+        password_chars[0] = secrets.choice(string.ascii_uppercase)
+        if not upper_var.get():
+            for i in range(1, len(password_chars)):
+                if password_chars[i] in string.ascii_uppercase:
+                    password_chars[i] = secrets.choice(alphabet or string.ascii_lowercase)
+                    break
 
     password = ''.join(password_chars)
+
+    years = estimate_bruteforce_years(length, len(alphabet_set))
+    strength_var.set(f"约{years:.2e}年可被暴力破解")
 
     note = note_var.get()
     if save_var.get():
@@ -145,6 +172,7 @@ log_path_var = tk.StringVar(value=settings.get("log_dir", "data_file"))
 note_var = tk.StringVar()
 result_var = tk.StringVar()
 status_var = tk.StringVar()
+strength_var = tk.StringVar()
 
 main_frame = ttk.Frame(root, padding=20)
 main_frame.pack(fill="both", expand=True)
@@ -179,7 +207,7 @@ length_label.grid(row=0, column=0, sticky="e", padx=(0,5))
 length_entry = ttk.Entry(frame, textvariable=length_var, width=7)
 length_entry.grid(row=0, column=1, sticky="w")
 
-letters_cb = ttk.Checkbutton(frame, text="字母", variable=letters_var)
+letters_cb = ttk.Checkbutton(frame, text="小写字母", variable=letters_var)
 letters_cb.grid(row=1, column=0, sticky="w")
 digits_cb = ttk.Checkbutton(frame, text="数字", variable=digits_var)
 digits_cb.grid(row=1, column=1, sticky="w")
@@ -189,16 +217,16 @@ special_cb = ttk.Checkbutton(frame, text="特殊字符", variable=special_var)
 special_cb.grid(row=2, column=0, sticky="w")
 capital_cb = ttk.Checkbutton(frame, text="首字母大写", variable=capital_var)
 capital_cb.grid(row=2, column=1, sticky="w")
-copy_cb = ttk.Checkbutton(frame, text="生成后自动复制", variable=copy_var)
+copy_cb = ttk.Checkbutton(frame, text="生成后复制", variable=copy_var)
 copy_cb.grid(row=3, column=0, columnspan=2, sticky="w")
 save_cb = ttk.Checkbutton(frame, text="保存到文件", variable=save_var)
 save_cb.grid(row=3, column=2, sticky="w")
 
-note_label = ttk.Label(frame, text="备注:")
+note_label = ttk.Label(frame, text="备注")
 note_label.grid(row=4, column=0, sticky="e")
 note_entry = ttk.Entry(frame, textvariable=note_var, width=30)
 note_entry.grid(row=4, column=1, sticky="w")
-ttk.Label(frame, text="备注将写入文件").grid(row=4, column=2, sticky="w", padx=(5,0))
+ttk.Label(frame, text="备注内容会保存到日志").grid(row=4, column=2, sticky="w", padx=(5,0))
 
 path_label = ttk.Label(frame, text="日志目录")
 path_label.grid(row=5, column=0, sticky="e")
@@ -208,7 +236,7 @@ def choose_dir():
     path = filedialog.askdirectory(initialdir=log_path_var.get() or '.')
     if path:
         log_path_var.set(path)
-choose_btn = ttk.Button(frame, text="选择...", command=choose_dir)
+choose_btn = ttk.Button(frame, text="选择目录...", command=choose_dir)
 choose_btn.grid(row=5, column=2, sticky="w")
 
 generate_button = ttk.Button(frame, text="生成密码", command=generate_password)
@@ -220,6 +248,8 @@ result_entry = ttk.Entry(result_frame, textvariable=result_var, state="readonly"
 result_entry.pack(side="left", fill="x", expand=True)
 copy_btn = ttk.Button(result_frame, text="复制", command=copy_password)
 copy_btn.pack(side="left", padx=(5,0))
+strength_label = ttk.Label(main_frame, textvariable=strength_var, font=("Segoe UI", 9))
+strength_label.pack(fill="x")
 status_label = ttk.Label(main_frame, textvariable=status_var)
 status_label.pack(fill="x")
 
