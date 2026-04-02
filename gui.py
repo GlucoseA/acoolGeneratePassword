@@ -1,287 +1,154 @@
-#!/usr/bin/env python3
-"""Tkinter interface for the password generator."""
+"""
+gui.py - acoolPwd 密码管理器 v2.0
 
-import os
-import secrets
-import string
-import json
-import math
+全面升级的图形界面密码管理器，功能包括：
+- 加密密码库（Fernet + PBKDF2HMAC 主密码保护）
+- 增强密码/密码短语/PIN 生成器
+- 可视化密码强度评估
+- 密码库管理（增删改查、搜索、分类、收藏）
+- 深色/浅色主题切换
+- 导出 JSON/CSV
+"""
+
 import tkinter as tk
-from tkinter import filedialog, messagebox
-from tkinter import ttk
+from tkinter import ttk, messagebox, filedialog
+import json
+from pathlib import Path
 
 try:
     import pyperclip
+    CLIPBOARD_AVAILABLE = True
 except ImportError:
-    pyperclip = None
+    CLIPBOARD_AVAILABLE = False
 
-SETTINGS_DIR = os.path.join(os.path.expanduser("~"), ".acoolpwd")
-SETTINGS_FILE = os.path.join(SETTINGS_DIR, "settings.json")
-
-
-def load_settings() -> dict:
-    """Load configuration from SETTINGS_FILE if available."""
-    if os.path.exists(SETTINGS_FILE):
-        try:
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
+from generator import (
+    generate_password, generate_passphrase, generate_pin,
+    calculate_strength, PRESETS,
+)
+from vault import PasswordVault, CATEGORIES, CRYPTO_AVAILABLE
 
 
-def save_settings(settings: dict) -> None:
-    """Persist settings to SETTINGS_FILE."""
+# ---------------------------------------------------------------------------
+# Theme definitions
+# ---------------------------------------------------------------------------
+
+THEMES = {
+    "light": {
+        "bg": "#f5f6fa",
+        "sidebar": "#2c3e50",
+        "sidebar_hover": "#34495e",
+        "sidebar_active": "#3498db",
+        "sidebar_text": "#ecf0f1",
+        "card": "#ffffff",
+        "text": "#2c3e50",
+        "text2": "#7f8c8d",
+        "accent": "#3498db",
+        "accent2": "#2980b9",
+        "border": "#dfe6e9",
+        "danger": "#e74c3c",
+        "success": "#27ae60",
+        "warning": "#f39c12",
+        "input_bg": "#ffffff",
+        "pw_fg": "#e67e22",
+    },
+    "dark": {
+        "bg": "#1a1a2e",
+        "sidebar": "#16213e",
+        "sidebar_hover": "#1a2a4a",
+        "sidebar_active": "#e94560",
+        "sidebar_text": "#e0e0e0",
+        "card": "#16213e",
+        "text": "#e0e0e0",
+        "text2": "#a0a0b0",
+        "accent": "#e94560",
+        "accent2": "#c73652",
+        "border": "#2a2a4a",
+        "danger": "#e74c3c",
+        "success": "#2ecc71",
+        "warning": "#f39c12",
+        "input_bg": "#0f3460",
+        "pw_fg": "#e94560",
+    },
+}
+
+SETTINGS_FILE = Path.home() / ".acoolpwd" / "settings.json"
+
+
+def _load_app_settings():
     try:
-        os.makedirs(SETTINGS_DIR, exist_ok=True)
+        with open(SETTINGS_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_app_settings(data):
+    try:
+        SETTINGS_FILE.parent.mkdir(exist_ok=True)
+        existing = _load_app_settings()
+        existing.update(data)
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, ensure_ascii=False, indent=2)
+            json.dump(existing, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
 
 
-def estimate_bruteforce_years(length: int, alphabet_size: int, guesses_per_second: float = 1e9) -> float:
-    """Return estimated brute-force cracking time in years."""
-    if length <= 0 or alphabet_size <= 1:
-        return 0.0
-    entropy_bits = length * math.log2(alphabet_size)
-    log2_seconds = entropy_bits - math.log2(guesses_per_second)
-    seconds = 2 ** log2_seconds
-    years = seconds / 31_557_600
-    return years
+# ---------------------------------------------------------------------------
+# Main Application Window
+# ---------------------------------------------------------------------------
 
-def copy_password() -> None:
-    """Copy generated password to clipboard if available."""
-    password = result_var.get()
-    if not password:
-        return
-    if pyperclip:
-        pyperclip.copy(password)
-        status_var.set("密码已复制到剪贴板")
-        root.after(2000, lambda: status_var.set(""))
-    else:
-        messagebox.showwarning("Unavailable", "pyperclip not installed.")
+class PasswordManagerApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("acoolPwd - 密码管理器")
+        self.resizable(False, False)
 
-def generate_password() -> None:
-    try:
-        length = int(length_var.get())
-        if length <= 0:
-            raise ValueError
-    except ValueError:
-        messagebox.showerror("Invalid input", "密码长度必须为正整数。")
-        return
+        settings = _load_app_settings()
+        self.current_theme = settings.get("theme", "light")
+        self.vault = PasswordVault()
 
-    alphabet_set = set()
-    categories = []
-    if letters_var.get():
-        alphabet_set.update(string.ascii_lowercase)
-        categories.append(string.ascii_lowercase)
-    if upper_var.get():
-        alphabet_set.update(string.ascii_uppercase)
-        categories.append(string.ascii_uppercase)
-    if digits_var.get():
-        alphabet_set.update(string.digits)
-        categories.append(string.digits)
-    if special_var.get():
-        alphabet_set.update(string.punctuation)
-        categories.append(string.punctuation)
-    if capital_var.get():
-        alphabet_set.update(string.ascii_uppercase)
+        w, h = 960, 660
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+        self.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
 
-    alphabet = ''.join(alphabet_set)
-    if not alphabet and not capital_var.get():
-        messagebox.showerror("Invalid selection", "请至少选择一种字符类型。")
-        return
+        self._login_page = None
+        self._main_page = None
+        self._show_login()
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
-    extra_upper = capital_var.get() and not upper_var.get()
-    required_len = len(categories) + (1 if extra_upper else 0)
-    if length < required_len:
-        messagebox.showerror("Invalid input", "长度过短，无法满足所选字符类型。")
-        return
+    def _on_close(self):
+        self.vault.lock()
+        _save_app_settings({"theme": self.current_theme})
+        self.destroy()
 
-    password_chars = [secrets.choice(c) for c in categories]
-    if extra_upper:
-        password_chars.append(secrets.choice(string.ascii_uppercase))
+    def t(self):
+        """Return current theme dict."""
+        return THEMES[self.current_theme]
 
-    password_chars += [secrets.choice(alphabet or string.ascii_lowercase) for _ in range(length - len(password_chars))]
-    secrets.SystemRandom().shuffle(password_chars)
+    def _show_login(self):
+        if self._main_page:
+            self._main_page.destroy()
+            self._main_page = None
+        self._login_page = LoginPage(self)
+        self._login_page.pack(fill="both", expand=True)
 
-    if capital_var.get():
-        password_chars[0] = secrets.choice(string.ascii_uppercase)
-        if not upper_var.get():
-            for i in range(1, len(password_chars)):
-                if password_chars[i] in string.ascii_uppercase:
-                    password_chars[i] = secrets.choice(alphabet or string.ascii_lowercase)
-                    break
+    def on_login_success(self):
+        if self._login_page:
+            self._login_page.destroy()
+            self._login_page = None
+        self._main_page = MainPage(self)
+        self._main_page.pack(fill="both", expand=True)
 
-    password = ''.join(password_chars)
+    def do_lock(self):
+        self.vault.lock()
+        self._show_login()
 
-    years = estimate_bruteforce_years(length, len(alphabet_set))
-    strength_var.set(f"约{years:.2e}年可被暴力破解")
+    def toggle_theme(self):
+        self.current_theme = "dark" if self.current_theme == "light" else "light"
+        _save_app_settings({"theme": self.current_theme})
+        if self._main_page:
+            self._main_page.destroy()
+            self._main_page = MainPage(self)
+            self._main_page.pack(fill="both", expand=True)
 
-    note = note_var.get()
-    if save_var.get():
-        import hashlib
-        os.makedirs(log_path_var.get(), exist_ok=True)
-        digest = hashlib.sha256(password.encode("utf-8")).hexdigest()
-        with open(os.path.join(log_path_var.get(), "Token.txt"), "a", encoding="utf-8") as f:
-            f.write(f"{note}: {digest}\n")
-
-    result_var.set(password)
-
-    if copy_var.get():
-        copy_password()
-
-root = tk.Tk()
-root.title("Password Generator")
-root.resizable(False, False)
-try:
-    root.iconphoto(False, tk.PhotoImage(file=os.path.join("resources", "logo.png")))
-except Exception:
-    pass
-
-style = ttk.Style()
-try:
-    style.theme_use("vista")  # 在Windows上使用vista主题
-except tk.TclError:
-    try:
-        style.theme_use("clam")
-    except tk.TclError:
-        pass
-
-# 配置Checkbutton样式以显示√
-style.configure("TCheckbutton", 
-                font=("Segoe UI", 10))
-style.configure("TFrame", background="#F2F2F2")
-style.configure("TLabel", background="#F2F2F2", font=("Segoe UI", 10))
-style.configure("Header.TLabel", font=("Segoe UI", 16, "bold"), background="#F2F2F2")
-style.configure("Result.TEntry", foreground="#e67e22", font=("Consolas", 12))
-
-settings = load_settings()
-
-length_var = tk.StringVar(value=str(settings.get("length", 8)))
-letters_var = tk.BooleanVar(value=settings.get("letters", True))
-upper_var = tk.BooleanVar(value=settings.get("upper", True))
-digits_var = tk.BooleanVar(value=settings.get("digits", True))
-special_var = tk.BooleanVar(value=settings.get("special", False))
-capital_var = tk.BooleanVar(value=settings.get("capital", False))
-copy_var = tk.BooleanVar(value=settings.get("copy", False))
-save_var = tk.BooleanVar(value=settings.get("save", True))
-log_path_var = tk.StringVar(value=settings.get("log_dir", "data_file"))
-
-note_var = tk.StringVar()
-result_var = tk.StringVar()
-status_var = tk.StringVar()
-strength_var = tk.StringVar()
-
-main_frame = ttk.Frame(root, padding=20)
-main_frame.pack(fill="both", expand=True)
-
-header = ttk.Frame(main_frame)
-header.pack(fill="x", pady=(0, 10))
-logo_img = None
-try:
-    logo_img = tk.PhotoImage(file=os.path.join("resources", "logo.png"))
-    # 缩放为32x32像素
-    w, h = logo_img.width(), logo_img.height()
-    scale = max(1, max(w // 32, h // 32))
-    if scale > 1:
-        logo_img = logo_img.subsample(scale, scale)
-    logo_label = ttk.Label(header, image=logo_img)
-    # 用全局变量保存图片引用，防止被回收
-    global _logo_img_ref
-    _logo_img_ref = logo_img
-    logo_label.pack(side="left")
-except Exception:
-    logo_label = ttk.Label(header, text="")
-    logo_label.pack(side="left")
-
-title_label = ttk.Label(header, text="Password Generator", style="Header.TLabel")
-title_label.pack(side="left", padx=(10, 0))
-
-frame = ttk.LabelFrame(main_frame, text="设置", padding=10)
-frame.pack(fill="x")
-
-length_label = ttk.Label(frame, text="密码长度")
-length_label.grid(row=0, column=0, sticky="e", padx=(0,5))
-length_entry = ttk.Entry(frame, textvariable=length_var, width=7)
-length_entry.grid(row=0, column=1, sticky="w")
-
-letters_cb = ttk.Checkbutton(frame, text="小写字母", variable=letters_var)
-letters_cb.grid(row=1, column=0, sticky="w")
-digits_cb = ttk.Checkbutton(frame, text="数字", variable=digits_var)
-digits_cb.grid(row=1, column=1, sticky="w")
-upper_cb = ttk.Checkbutton(frame, text="大写字母", variable=upper_var)
-upper_cb.grid(row=1, column=2, sticky="w")
-special_cb = ttk.Checkbutton(frame, text="特殊字符", variable=special_var)
-special_cb.grid(row=2, column=0, sticky="w")
-capital_cb = ttk.Checkbutton(frame, text="首字母大写", variable=capital_var)
-capital_cb.grid(row=2, column=1, sticky="w")
-copy_cb = ttk.Checkbutton(frame, text="生成后复制", variable=copy_var)
-copy_cb.grid(row=3, column=0, columnspan=2, sticky="w")
-save_cb = ttk.Checkbutton(frame, text="保存到文件", variable=save_var)
-save_cb.grid(row=3, column=2, sticky="w")
-
-note_label = ttk.Label(frame, text="备注")
-note_label.grid(row=4, column=0, sticky="e")
-note_entry = ttk.Entry(frame, textvariable=note_var, width=30)
-note_entry.grid(row=4, column=1, sticky="w")
-ttk.Label(frame, text="备注内容会保存到日志").grid(row=4, column=2, sticky="w", padx=(5,0))
-
-path_label = ttk.Label(frame, text="日志目录")
-path_label.grid(row=5, column=0, sticky="e")
-path_entry = ttk.Entry(frame, textvariable=log_path_var, width=25)
-path_entry.grid(row=5, column=1, sticky="w")
-def choose_dir():
-    path = filedialog.askdirectory(initialdir=log_path_var.get() or '.')
-    if path:
-        log_path_var.set(path)
-choose_btn = ttk.Button(frame, text="选择目录...", command=choose_dir)
-choose_btn.grid(row=5, column=2, sticky="w")
-
-generate_button = ttk.Button(frame, text="生成密码", command=generate_password)
-generate_button.grid(row=6, column=0, columnspan=3, pady=(5, 0))
-
-result_frame = ttk.Frame(main_frame, padding=(0,10,0,0))
-result_frame.pack(fill="x")
-result_entry = ttk.Entry(result_frame, textvariable=result_var, state="readonly", style="Result.TEntry")
-result_entry.pack(side="left", fill="x", expand=True)
-copy_btn = ttk.Button(result_frame, text="复制", command=copy_password)
-copy_btn.pack(side="left", padx=(5,0))
-strength_label = ttk.Label(main_frame, textvariable=strength_var, font=("Segoe UI", 9))
-strength_label.pack(fill="x")
-status_label = ttk.Label(main_frame, textvariable=status_var)
-status_label.pack(fill="x")
-
-# 监听字母复选框变化，控制首字母大写可用性
-def on_letters_var_change(*args):
-    if not (letters_var.get() or upper_var.get()):
-        capital_var.set(False)
-        capital_cb.state(["disabled"])
-    else:
-        capital_cb.state(["!disabled"])
-
-letters_var.trace_add("write", lambda *args: on_letters_var_change())
-upper_var.trace_add("write", lambda *args: on_letters_var_change())
-# 初始化一次
-on_letters_var_change()
-
-
-def on_close() -> None:
-    data = {
-        "length": int(length_var.get() or 8),
-        "letters": letters_var.get(),
-        "upper": upper_var.get(),
-        "digits": digits_var.get(),
-        "special": special_var.get(),
-        "capital": capital_var.get(),
-        "copy": copy_var.get(),
-        "save": save_var.get(),
-        "log_dir": log_path_var.get(),
-    }
-    save_settings(data)
-    root.destroy()
-
-
-root.protocol("WM_DELETE_WINDOW", on_close)
-root.mainloop()
